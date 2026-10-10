@@ -56,8 +56,10 @@ jobs:
         uses: actions/deploy-pages@v4
       - uses: actions/checkout@v4
         if: github.event_name != 'push'
+        with:
+          ref: main  # includes the data commit the build job just pushed
       - name: Notify IndexNow (Bing, Yandex)
         if: github.event_name != 'push'
         run: |
-          python -m sebzehali.build --out site --base-url https://www.sebzehali.com
-          python -m sebzehali.indexnow site/sitemap.xml
+          python3 -m sebzehali.build --out site --base-url https://www.sebzehali.com
+          python3 -m sebzehali.indexnow site/sitemap.xml
