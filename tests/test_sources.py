@@ -41,3 +41,25 @@ class Sources(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PdfAndFormSources(unittest.TestCase):
+    def test_antalya_two_column_pdf(self):
+        from sebzehali.sources import antalya
+        rows = antalya.parse((FIX / "antalya.txt").read_text(encoding="utf-8"))
+        self.assertEqual(len(rows), 88)
+        by = {r[0]: r for r in rows}
+        self.assertEqual(by["Domates"][2:4], ("30,00", "70,00"))
+        self.assertEqual(by["Domates"][5], "sebze")
+        self.assertEqual(by["Elma (Golden)"][5], "meyve")
+        self.assertEqual(by["Ahududu"][5], "ithal")
+        self.assertEqual(by["Ahududu"][2], "1.200,00")
+
+    def test_mersin_keeps_central_conventional_rows_once(self):
+        from sebzehali.sources import mersin
+        rows = mersin.parse((FIX / "mersin-sebze.html").read_text(encoding="utf-8"), "sebze")
+        names = [r[0] for r in rows]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertIn("ACUR", names)
+        acur = rows[names.index("ACUR")]
+        self.assertEqual(acur[1:5], ("KİLOGRAM", "7 TL", "31 TL", "12,19 TL"))

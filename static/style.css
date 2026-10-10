@@ -39,4 +39,16 @@ figcaption i{display:inline-block;width:10px;height:10px;border-radius:50%;margi
 .tags a{padding:4px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;background:var(--surface);font-size:14px}
 .src{font-size:13px;color:var(--muted);margin-top:24px}
 footer{margin-top:48px;padding:20px 0;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
-@media (max-width:560px){.prices th:nth-child(3),.prices td:nth-child(3){display:none}.prices th,.prices td{padding:7px 6px}}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px}
+@media (max-width:560px){.prices .u{display:none}.prices th,.prices td{padding:7px 6px;font-size:14px}
+.top .wrap{flex-wrap:nowrap}.top nav{overflow-x:auto;flex-wrap:nowrap;white-space:nowrap;scrollbar-width:none;gap:12px}
+.top nav::-webkit-scrollbar{display:none}.logo{font-size:17px;flex-shrink:0}}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:560px){.twocol{grid-template-columns:1fr}}
+.twocol h3{font-size:16px;margin:4px 0 8px}
+.movers,.compare{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px 10px 34px;margin:0}
+.movers li,.compare li{padding:4px 0}
+.compare small{color:var(--muted)}
+.contact{font-size:20px;font-weight:700}
+footer .links a{margin-right:2px}
+.top nav a:last-child{color:var(--muted)}

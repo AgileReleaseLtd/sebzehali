@@ -925,6 +925,16 @@
    "category": "sebze"
   },
   {
+   "raw": "Rozmerin",
+   "product": "biberiye",
+   "variety": "",
+   "unit": "kg",
+   "min": 20.0,
+   "max": 45.0,
+   "avg": null,
+   "category": "sebze"
+  },
+  {
    "raw": "Böğrülce",
    "product": "borulce",
    "variety": "",
@@ -1361,16 +1371,6 @@
    "unit": "bağ",
    "min": 15.0,
    "max": 25.0,
-   "avg": null,
-   "category": "sebze"
-  },
-  {
-   "raw": "Rozmerin",
-   "product": "rozmerin",
-   "variety": "",
-   "unit": "kg",
-   "min": 20.0,
-   "max": 45.0,
    "avg": null,
    "category": "sebze"
   },

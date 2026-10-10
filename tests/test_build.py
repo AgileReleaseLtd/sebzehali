@@ -17,6 +17,10 @@ class Build(unittest.TestCase):
             self.assertIn("<svg", (out / "urun/domates/index.html").read_text(encoding="utf-8"))
             self.assertEqual((out / "CNAME").read_text().strip(), "www.sebzehali.com")
             self.assertIn("/hal/izmir/", (out / "sitemap.xml").read_text())
+            self.assertTrue((out / "hal/izmir/domates/index.html").exists())
+            self.assertTrue((out / "haftalik/index.html").exists())
+            for p in ("gizlilik", "iletisim"):
+                self.assertIn("info@agilerelease.co.uk", (out / p / "index.html").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

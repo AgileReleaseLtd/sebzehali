@@ -11,6 +11,10 @@ static website. Python 3 standard library only; no database, no server.
    - `/`: today's overview, popular products, search;
    - `/hal/<city>/`: one city's bulletin with change since the previous one;
    - `/urun/<product>/`: one product across cities, 90-day chart, FAQ (with FAQPage markup);
+   - `/hal/<city>/<product>/`: one product in one city, compared with the other cities;
+   - `/haftalik/` and `/haftalik/<year-week>/`: weekly risers and fallers;
+   - `/gizlilik/` (privacy and cookies) and `/iletisim/` (contact); settings in `sebzehali/config.py`,
+     including the optional Cloudflare Web Analytics token;
    - `/hakkinda/`: sources and disclaimer; plus `sitemap.xml`, `robots.txt`, `CNAME`.
 3. GitHub Actions (`.github/workflows/daily.yml`) runs both four times a day, commits new data and
    deploys to GitHub Pages.
@@ -22,11 +26,12 @@ static website. Python 3 standard library only; no database, no server.
 | İzmir | open data JSON API (`openapi.izmir.bel.tr`) | any past date |
 | Bursa | `bursa.bel.tr/hal_fiyatlari` (HTML) | today only, so history builds up day by day |
 | Konya | `konya.bel.tr/hal-fiyatlari?tarih=` (HTML) | ~2,000 past bulletins |
+| Antalya | `gezipanel.antalya.bel.tr` daily PDF, read with `pdftotext -layout` (poppler-utils) | any past date |
+| Mersin | `mersin.bel.tr/hal-fiyatlari-day` form POST (central market, conventional rows) | any past date |
 
 Not yet: İstanbul's open data API (`halfiyatlaripublicdata.ibb.gov.tr`) refused connections when
 tested on 2026-10-10. Its website's own request embeds login values in the page; don't reuse those.
-Ankara, Antalya and Mersin publish too but need a JavaScript-rendered page or a form; add them as
-new modules in `sebzehali/sources/`.
+Ankara's page sits behind a Cloudflare bot challenge; don't try to get round it.
 
 ## Adding a city
 

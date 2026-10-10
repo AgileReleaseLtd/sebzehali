@@ -16,7 +16,7 @@ import pathlib
 import shutil
 import statistics
 
-from . import normalize, sources
+from . import config, normalize, sources
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -24,7 +24,7 @@ STATIC = ROOT / "static"
 
 CITY_NAMES = {m.CITY: m.NAME for m in sources.ALL}
 CITY_URLS = {m.CITY: m.URL for m in sources.ALL}
-CITY_COLORS = {"izmir": "#1f7a4d", "bursa": "#c2410c", "konya": "#1d4ed8"}
+CITY_COLORS = {"izmir": "#1f7a4d", "bursa": "#c2410c", "konya": "#1d4ed8", "antalya": "#b45309", "mersin": "#7c3aed"}
 MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
 FEATURED = ["domates", "biber", "patates", "sogan", "salatalik", "patlican", "elma", "limon", "muz", "portakal",
             "mandalina", "uzum", "havuc", "kabak", "fasulye", "marul"]
@@ -129,19 +129,29 @@ def page(site, path, title, description, body, extra_head=""):
 <body>
 <header class="top"><div class="wrap">
 <a class="logo" href="/"><span class="leaf">🥬</span> sebzehali<span class="tld">.com</span></a>
-<nav>{''.join(f'<a href="/hal/{c}/">{e(CITY_NAMES[c])}</a>' for c in site.cities)}</nav>
+<nav>{''.join(f'<a href="/hal/{c}/">{e(CITY_NAMES[c])}</a>' for c in site.cities)}<a href="/haftalik/">Haftalık</a></nav>
 </div></header>
 <main class="wrap">
 {body}
 </main>
 <footer><div class="wrap">
 <p>Fiyatlar belediyelerin yayımladığı günlük hal bültenlerinden alınır; toptan (hal) fiyatlarıdır, market ve pazar fiyatları farklıdır.
-<a href="/hakkinda/">Kaynaklar ve açıklama</a></p>
+</p>
+<p class="links"><a href="/hakkinda/">Kaynaklar ve açıklama</a> · <a href="/haftalik/">Haftalık özet</a> ·
+<a href="/gizlilik/">Gizlilik ve çerezler</a> · <a href="/iletisim/">İletişim</a></p>
 <p>© {dt.date.today().year} sebzehali.com</p>
 </div></footer>
-</body>
+{analytics_snippet()}</body>
 </html>
 """
+
+
+def analytics_snippet():
+    if not config.CLOUDFLARE_BEACON_TOKEN:
+        return ""
+    beacon = json.dumps({"token": config.CLOUDFLARE_BEACON_TOKEN})
+    return (f"<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" "
+            f"data-cf-beacon='{beacon}'></script>\n")
 
 
 def change_badge(now, before):
@@ -154,36 +164,54 @@ def change_badge(now, before):
     return f'<span class="chg {cls}">{arrow} %{abs(pct):.0f}</span>'
 
 
-def price_table(rows, show_city=False, prev=None):
-    """rows: list of (city, item). prev: {(product, variety, unit): item} for change badges."""
-    head = "<th>Şehir</th>" if show_city else "<th>Ürün</th>"
-    out = [f'<table class="prices"><thead><tr>{head}<th>Çeşit</th><th>Birim</th><th class="n">En düşük</th>'
-           f'<th class="n">En yüksek</th><th class="n">Değişim</th></tr></thead><tbody>']
+def price_table(rows, show_product=True, show_city=False, prev=None, city_scope=False):
+    """rows: list of (city, item). prev: {(city, product, variety, unit): item} for change badges.
+    city_scope: product names link to that city's product page instead of the all-cities one."""
+    head = ("<th>Ürün</th>" if show_product else "") + ("<th>Şehir</th>" if show_city else "")
+    out = [f'<div class="tablewrap"><table class="prices"><thead><tr>{head}<th>Çeşit</th><th class="u">Birim</th>'
+           f'<th class="n">En düşük</th><th class="n">En yüksek</th><th class="n">Değişim</th></tr></thead><tbody>']
     for city, it in rows:
-        before = prev.get((city, it["product"], it["variety"], it["unit"])) if prev else None
-        first = (f'<a href="/hal/{city}/">{e(CITY_NAMES[city])}</a>' if show_city
-                 else f'<a href="/urun/{it["product"]}/">{e(normalize.product_name(it["product"], [it["raw"]]))}</a>')
+        p = it["product"]
+        before = prev.get((city, p, it["variety"], it["unit"])) if prev else None
+        cells = ""
+        if show_product:
+            href = f"/hal/{city}/{p}/" if city_scope else f"/urun/{p}/"
+            cells += f'<td><a href="{href}">{e(normalize.product_name(p, [it["raw"]]))}</a></td>'
+        if show_city:
+            href = f"/hal/{city}/{p}/" if not show_product else f"/hal/{city}/"
+            cells += f'<td><a href="{href}">{e(CITY_NAMES[city])}</a></td>'
+        q = normalize.slugify(it["raw"] + " " + CITY_NAMES[city]).replace("-", " ")
         out.append(
-            f'<tr data-q="{e(normalize.slugify(it["raw"]).replace("-", " "))}"><td>{first}</td><td>{e(it["variety"]) or "–"}</td>'
-            f'<td>{e(it["unit"])}</td><td class="n">{money(it["min"])}</td><td class="n">{money(it["max"])}</td>'
+            f'<tr data-q="{e(q)}">{cells}<td>{e(it["variety"]) or "–"}</td>'
+            f'<td class="u">{e(it["unit"])}</td><td class="n">{money(it["min"])}</td><td class="n">{money(it["max"])}</td>'
             f'<td class="n">{change_badge(mid(it), mid(before) if before else None)}</td></tr>')
-    out.append("</tbody></table>")
+    out.append("</tbody></table></div>")
     return "".join(out)
+
+
+def faq_block(faq):
+    html_ = "".join(f"<details><summary>{e(q)}</summary><p>{e(a)}</p></details>" for q, a in faq)
+    ld = json.dumps({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faq]},
+        ensure_ascii=False)
+    return (f'<section class="faq"><h2>Sık sorulanlar</h2>{html_}</section>',
+            f'<script type="application/ld+json">{ld}</script>\n')
 
 
 # ---------------------------------------------------------------- pages
 
-def home(site):
+def home(site, week=None):
     cards = []
     for p in FEATURED:
         if p not in site.products:
             continue
-        lows = [it["min"] for items in site.products[p].values() for it in items if it["unit"] == "kg"]
-        highs = [it["max"] for items in site.products[p].values() for it in items if it["unit"] == "kg"]
-        if not lows:
+        mids = [mid(it) for items in site.products[p].values() for it in items
+                if it["unit"] == "kg" and it["category"] != "ithal"]
+        if not mids:
             continue
         cards.append(f'<a class="card" href="/urun/{p}/"><b>{e(site.name(p))}</b>'
-                     f'<span>{money(min(lows))} – {money(max(highs))}</span><small>kg, {len(site.products[p])} hal</small></a>')
+                     f'<span>{money(round(statistics.median(mids)))} <small>/ kg</small></span>'
+                     f'<small>ortanca, {len(site.products[p])} hal</small></a>')
 
     city_cards = "".join(
         f'<a class="city" href="/hal/{c}/"><b>{e(CITY_NAMES[c])} hal fiyatları</b>'
@@ -199,11 +227,12 @@ def home(site):
 Son bülten: <b>{tr_date(site.newest, True)}</b>.</p>
 </section>
 <section><h2>Çok aranan ürünler</h2><div class="cards">{''.join(cards)}</div></section>
+{week_teaser(site, week)}
 <section><h2>Şehirler</h2><div class="cities">{city_cards}</div></section>
 <section>
 <h2>Tüm ürünler</h2>
 <input id="q" type="search" placeholder="Ürün ara: domates, elma, hamsi…" autocomplete="off" aria-label="Ürün ara">
-{price_table(all_rows, show_city=False)}
+{price_table(all_rows, show_city=True)}
 </section>
 <script>
 (function(){{var q=document.getElementById('q'),rows=document.querySelectorAll('table.prices tbody tr');
@@ -217,6 +246,19 @@ q.addEventListener('input',function(){{var v=n(q.value);rows.forEach(function(r)
     return page(site, "/", title, desc, body)
 
 
+def week_teaser(site, week):
+    if not week:
+        return ""
+    rows = [r for r in week["products"] if r[0] in site.products and r[2] >= 2]
+    up = sorted((r for r in rows if r[1] >= 1), key=lambda r: -r[1])[:3]
+    down = sorted((r for r in rows if r[1] <= -1), key=lambda r: r[1])[:3]
+    li = lambda rs: "".join(f'<li><a href="/urun/{p}/">{e(site.name(p))}</a> <span class="chg {"up" if v > 0 else "down"}">'
+                            f'{"▲" if v > 0 else "▼"} %{abs(v):.0f}</span></li>' for p, v, _ in rs)
+    return (f'<section><h2>Bu hafta</h2><div class="twocol"><div><h3>Zamlananlar</h3><ol class="movers">{li(up)}</ol></div>'
+            f'<div><h3>Ucuzlayanlar</h3><ol class="movers">{li(down)}</ol></div></div>'
+            f'<p><a href="/haftalik/">Haftalık özetin tamamı →</a></p></section>')
+
+
 def city_page(site, c):
     date = site.latest[c]
     items = site.data[c][date]
@@ -227,7 +269,7 @@ def city_page(site, c):
         rows = [(c, it) for it in items if it["category"] == cat]
         if rows:
             rows.sort(key=lambda r: (normalize.slugify(site.name(r[1]["product"])), normalize.slugify(r[1]["variety"])))
-            sections.append(f"<h2>{e(label)}</h2>{price_table(rows, prev=prev)}")
+            sections.append(f"<h2>{e(label)}</h2>{price_table(rows, prev=prev, city_scope=True)}")
     history = sorted(site.data[c], reverse=True)[:10]
     body = f"""
 <nav class="crumbs"><a href="/">Hal fiyatları</a> › {e(CITY_NAMES[c])}</nav>
@@ -242,9 +284,9 @@ Kayıtlı bültenler: {', '.join(tr_date(d) for d in history)}{' …' if len(sit
     return page(site, f"/hal/{c}/", title, desc, body)
 
 
-def chart(site, product):
+def chart(site, product, cities=None):
     lines, legend, all_pts = [], [], []
-    for c in site.cities:
+    for c in cities or site.cities:
         unit, pts = site.series(c, product)
         pts = [p for p in pts if p[0] >= (dt.date.fromisoformat(site.newest) - dt.timedelta(days=90)).isoformat()]
         if len(pts) >= 2:
@@ -306,10 +348,7 @@ def product_page(site, product):
          "Hal fiyatı üreticinin ve komisyoncunun toptan satış fiyatıdır. Markete ve pazara gelene kadar nakliye, "
          "fire, işçilik ve kâr eklendiği için perakende fiyat genellikle daha yüksektir."),
     ]
-    faq_html = "".join(f"<details><summary>{e(q)}</summary><p>{e(a)}</p></details>" for q, a in faq)
-    ld = json.dumps({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
-        {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": a}} for q, a in faq]},
-        ensure_ascii=False)
+    faq_html, ld = faq_block(faq)
     related = [p for p in sorted(site.products, key=lambda p: site.name(p))
                if p != product and site.category.get(p) == site.category.get(product)][:24]
     body = f"""
@@ -317,16 +356,168 @@ def product_page(site, product):
 <h1>{e(name)} hal fiyatı bugün</h1>
 <p class="lead">{e(name)} toptan fiyatı {city_txt} hallerinde <b>{money(lo)} – {money(hi)}</b> / {e(unit)}
 ({tr_date(site.newest)}).</p>
-{price_table(rows, show_city=True, prev=prev)}
+{price_table(rows, show_product=False, show_city=True, prev=prev)}
 {chart(site, product)}
-<section class="faq"><h2>Sık sorulanlar</h2>{faq_html}</section>
+{faq_html}
 <section><h2>Diğer {e(normalize.CATEGORIES.get(site.category.get(product), 'ürün').lower())} fiyatları</h2>
 <p class="tags">{''.join(f'<a href="/urun/{p}/">{e(site.name(p))}</a>' for p in related)}</p></section>"""
     title = f"{name} Hal Fiyatı Bugün ({tr_date(site.newest)}) – {city_txt}"
     desc = (f"{name} hal fiyatı: {city_txt} hallerinde {unit} fiyatı {money(lo)} – {money(hi)}. "
             f"Şehir şehir güncel {name.lower()} toptan fiyatları ve 90 günlük fiyat grafiği.")
-    return page(site, f"/urun/{product}/", title, desc, body,
-                extra_head=f'<script type="application/ld+json">{ld}</script>\n')
+    return page(site, f"/urun/{product}/", title, desc, body, extra_head=ld)
+
+
+def city_product_page(site, c, product):
+    """/hal/<city>/<product>/: one product in one city, e.g. "İzmir hal domates fiyatı"."""
+    name, city = site.name(product), CITY_NAMES[c]
+    items = sorted(site.products[product][c], key=lambda it: normalize.slugify(it["variety"]))
+    prev = {(c, it["product"], it["variety"], it["unit"]): it
+            for it in site.previous(c, site.latest[c]) or [] if it["product"] == product}
+    unit = max({it["unit"] for it in items}, key=lambda u: (sum(i["unit"] == u for i in items), u == "kg"))
+    same = [it for it in items if it["unit"] == unit]
+    lo, hi = min(i["min"] for i in same), max(i["max"] for i in same)
+    here = statistics.median(mid(i) for i in same)
+
+    others = []
+    for oc, oitems in site.products[product].items():
+        mids = [mid(i) for i in oitems if i["unit"] == unit]
+        if oc != c and mids:
+            others.append((oc, statistics.median(mids)))
+    others.sort(key=lambda r: r[1])
+    compare = ""
+    if others:
+        lis = "".join(f'<li><a href="/hal/{oc}/{product}/">{e(CITY_NAMES[oc])}</a>: {money(v)} '
+                      f'<small>({"+" if v > here else ""}{(v - here) / here * 100:.0f}%)</small></li>'
+                      for oc, v in others)
+        compare = (f'<section><h2>Diğer hallerle karşılaştırma</h2><p>{e(city)} ortanca fiyatı {money(here)} / {e(unit)}. '
+                   f'Diğer hallerde ortanca fiyat:</p><ul class="compare">{lis}</ul>'
+                   f'<p><a href="/urun/{product}/">Tüm hallerde {e(name.lower())} fiyatları →</a></p></section>')
+
+    faq = [(f"{city} halinde {name.lower()} fiyatı ne kadar?",
+            f"{tr_date(site.latest[c])} tarihli {city} hal bülteninde {name.lower()} {unit} fiyatı "
+            f"{money(lo)} ile {money(hi)} arasında; ortanca fiyat yaklaşık {money(here)}.")]
+    if others:
+        cheap = others[0]
+        faq.append((f"{name} {city} halinde mi daha ucuz, diğer hallerde mi?",
+                    f"{CITY_NAMES[cheap[0]]} halinde ortanca fiyat {money(cheap[1])}; {city} halinde {money(here)}. "
+                    + (f"{city} daha ucuz." if here <= cheap[1] else f"{CITY_NAMES[cheap[0]]} daha ucuz.")))
+    faq_html, ld = faq_block(faq)
+    siblings = [p for p in sorted(site.products, key=lambda p: normalize.slugify(site.name(p)))
+                if p != product and c in site.products[p] and site.category.get(p) == site.category.get(product)][:30]
+    body = f"""
+<nav class="crumbs"><a href="/">Hal fiyatları</a> › <a href="/hal/{c}/">{e(city)}</a> › {e(name)}</nav>
+<h1>{e(city)} hal {e(name.lower())} fiyatı</h1>
+<p class="lead">{tr_date(site.latest[c], True)} tarihli {e(city)} hal bülteninde {e(name.lower())}:
+<b>{money(lo)} – {money(hi)}</b> / {e(unit)}.</p>
+{price_table([(c, it) for it in items], prev=prev, city_scope=True)}
+{chart(site, product, cities=[c])}
+{compare}
+{faq_html}
+<section><h2>{e(city)} halinde diğer ürünler</h2>
+<p class="tags">{''.join(f'<a href="/hal/{c}/{p}/">{e(site.name(p))}</a>' for p in siblings)}</p></section>
+<p class="src">Kaynak: <a href="{e(CITY_URLS[c])}" rel="nofollow noopener">{e(city)} Büyükşehir Belediyesi</a>.</p>"""
+    title = f"{city} Hal {name} Fiyatı Bugün ({tr_date(site.latest[c])})"
+    desc = (f"{city} hal {name.lower()} fiyatı: {money(lo)} – {money(hi)} / {unit} ({tr_date(site.latest[c])}). "
+            f"Çeşit çeşit {name.lower()} toptan fiyatı, fiyat grafiği ve diğer hallerle karşılaştırma.")
+    return page(site, f"/hal/{c}/{product}/", title, desc, body, extra_head=ld)
+
+
+# ---------------------------------------------------------------- weekly summary
+
+def iso_week(d):
+    y, w, _ = dt.date.fromisoformat(d).isocalendar()
+    return f"{y}-{w:02d}"
+
+
+def week_range(key):
+    y, w = map(int, key.split("-"))
+    start = dt.date.fromisocalendar(y, w, 1)
+    end = start + dt.timedelta(days=6)
+    a = f"{start.day} {MONTHS[start.month - 1]}" if start.month != end.month else str(start.day)
+    return f"{a} – {end.day} {MONTHS[end.month - 1]} {end.year}"
+
+
+def weekly_changes(site):
+    """{week: {"products": [(product, pct, n)], "cities": {city: pct}}} comparing each week with the one before.
+
+    A product's change is the median change of its (city, variety, unit) rows that appear in both
+    weeks, each row valued at its weekly mean; so a city adding or dropping a variety doesn't move it."""
+    means = collections.defaultdict(lambda: collections.defaultdict(list))
+    for c in site.data:
+        for d, items in site.data[c].items():
+            for it in items:
+                means[iso_week(d)][(c, it["product"], it["variety"], it["unit"])].append(mid(it))
+    weeks = sorted(means)
+    out = {}
+    for prev_w, w in zip(weeks, weeks[1:]):
+        changes = collections.defaultdict(list)
+        city_changes = collections.defaultdict(list)
+        for key, vals in means[w].items():
+            before = means[prev_w].get(key)
+            if not before:
+                continue
+            a, b = statistics.mean(before), statistics.mean(vals)
+            if a <= 0:
+                continue
+            pct = (b - a) / a * 100
+            changes[key[1]].append(pct)
+            city_changes[key[0]].append(pct)
+        prods = [(p, statistics.median(v), len(v)) for p, v in changes.items()]
+        out[w] = {"products": prods, "cities": {c: statistics.median(v) for c, v in city_changes.items() if v},
+                  "prev": prev_w}
+    return out
+
+
+def weekly_body(site, w, info, heading=True):
+    known = [r for r in info["products"] if r[0] in site.products or r[0] in site.raw_names]
+    solid = [r for r in known if r[2] >= 2] or known
+    up = sorted((r for r in solid if r[1] >= 1), key=lambda r: -r[1])[:10]
+    down = sorted((r for r in solid if r[1] <= -1), key=lambda r: r[1])[:10]
+
+    def lst(rows):
+        return "".join(f'<li><a href="/urun/{p}/">{e(site.name(p))}</a> <span class="chg {"up" if v > 0 else "down"}">'
+                       f'{"▲" if v > 0 else "▼"} %{abs(v):.0f}</span></li>' for p, v, _ in rows) or "<li>–</li>"
+    summary = []
+    if up:
+        summary.append(f"En çok zamlanan ürün <b>{e(site.name(up[0][0]).lower())}</b> oldu (ortalama %{up[0][1]:.0f}).")
+    if down:
+        summary.append(f"En çok ucuzlayan ürün <b>{e(site.name(down[0][0]).lower())}</b> oldu (ortalama %{abs(down[0][1]):.0f}).")
+    cities = sorted(info["cities"].items(), key=lambda r: r[1])
+    city_rows = "".join(f'<li><a href="/hal/{c}/">{e(CITY_NAMES.get(c, c))}</a>: '
+                        f'{"+" if v > 0 else ""}{v:.1f}%</li>' for c, v in cities)
+    head = f"<h1>Haftalık hal fiyatları özeti: {week_range(w)}</h1>" if heading else ""
+    return f"""{head}
+<p class="lead">{week_range(w)} haftasında hallerdeki fiyatlar bir önceki haftayla ({week_range(info['prev'])}) karşılaştırıldı.
+{' '.join(summary)}</p>
+<div class="twocol">
+<section><h2>En çok zamlananlar</h2><ol class="movers">{lst(up)}</ol></section>
+<section><h2>En çok ucuzlayanlar</h2><ol class="movers">{lst(down)}</ol></section>
+</div>
+<section><h2>Şehirlere göre ortalama değişim</h2><ul class="compare">{city_rows}</ul>
+<p class="src">Her ürünün aynı halde ve aynı çeşitteki haftalık ortalama fiyatı bir önceki haftayla karşılaştırılır;
+ürün değişimi bu farkların ortancasıdır.</p></section>"""
+
+
+def weekly_pages(site):
+    weeks = weekly_changes(site)
+    pages = {}
+    keys = sorted(weeks)
+    for w in keys:
+        nav = " · ".join(f'<a href="/haftalik/{k}/">{week_range(k)}</a>' for k in reversed(keys) if k != w)
+        body = (f'<nav class="crumbs"><a href="/">Hal fiyatları</a> › <a href="/haftalik/">Haftalık özet</a> › {week_range(w)}</nav>'
+                + weekly_body(site, w, weeks[w]) + f'<section><h2>Diğer haftalar</h2><p class="tags">{nav}</p></section>')
+        pages[f"/haftalik/{w}/"] = page(site, f"/haftalik/{w}/", f"Hal Fiyatları Haftalık Özet: {week_range(w)}",
+                                       f"{week_range(w)} haftasında hallerde en çok zamlanan ve ucuzlayan sebze ve meyveler.", body)
+    if keys:
+        last = keys[-1]
+        lis = "".join(f'<li><a href="/haftalik/{k}/">{week_range(k)}</a></li>' for k in reversed(keys))
+        body = (f'<nav class="crumbs"><a href="/">Hal fiyatları</a> › Haftalık özet</nav>'
+                f"<h1>Bu hafta hal fiyatları: zamlananlar ve ucuzlayanlar</h1>"
+                + weekly_body(site, last, weeks[last], heading=False)
+                + f'<section><h2>Geçmiş haftalar</h2><ul class="compare">{lis}</ul></section>')
+        pages["/haftalik/"] = page(site, "/haftalik/", "Haftalık Hal Fiyatları: Bu Hafta Zamlanan ve Ucuzlayan Ürünler",
+                                   "Hallerde bu hafta en çok zamlanan ve en çok ucuzlayan sebze ve meyveler, şehir şehir fiyat değişimi.", body)
+    return pages, (weeks[keys[-1]] if keys else None)
 
 
 def about_page(site):
@@ -344,9 +535,42 @@ Fiyatlar her gün birkaç kez otomatik olarak güncellenir.</p>
 <li>Farklı şehirlerde aynı ürün farklı adlarla geçebilir; ürünler ada göre eşleştirilir ve hata olabilir.</li>
 <li>Bilgiler bilgilendirme amaçlıdır; ticari kararlar için belediyenin resmi bültenini kontrol edin.</li>
 </ul>
-<p>Hata veya eksik bir şehir mi gördünüz? <a href="mailto:info@agilerelease.co.uk">info@agilerelease.co.uk</a></p>"""
+<p>Hata veya eksik bir şehir mi gördünüz? <a href="/iletisim/">İletişim</a></p>"""
     return page(site, "/hakkinda/", "Kaynaklar ve Açıklama – sebzehali.com",
                 "sebzehali.com hal fiyatlarının kaynakları ve fiyatların nasıl hesaplandığı.", body)
+
+
+def privacy_page(site):
+    analytics = ("Ziyaret istatistikleri için çerez kullanmayan Cloudflare Web Analytics kullanılır: sayfa adresi, "
+                 "yönlendiren site, ülke ve tarayıcı türü gibi toplu bilgiler kaydedilir; sizi tanımlayan bir bilgi "
+                 "veya çerez tutulmaz." if config.CLOUDFLARE_BEACON_TOKEN else
+                 "Şu anda ziyaretçi istatistiği aracı kullanılmamaktadır.")
+    body = f"""
+<h1>Gizlilik ve çerez politikası</h1>
+<p>Son güncelleme: {tr_date(config.PRIVACY_UPDATED)}</p>
+<h2>Kim işletiyor?</h2>
+<p>sebzehali.com, {e(config.OPERATOR)} tarafından işletilmektedir. İletişim: <a href="mailto:{config.CONTACT_EMAIL}">{config.CONTACT_EMAIL}</a></p>
+<h2>Hangi bilgileri topluyoruz?</h2>
+<p>Sitede üyelik, form veya yorum yoktur; sizden ad, e-posta veya telefon gibi kişisel bilgi istenmez.</p>
+<p>{analytics}</p>
+<p>Site GitHub Pages üzerinde barındırılır. GitHub, güvenlik ve hizmetin çalışması için ziyaretçilerin IP adresini
+kısa süreli olarak kaydedebilir (<a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="nofollow noopener">GitHub gizlilik bildirimi</a>).</p>
+<h2>Çerezler</h2>
+<p>sebzehali.com çerez kullanmaz. Site ileride reklam gösterirse bu sayfa güncellenecek ve çerezler için önceden izniniz istenecektir.</p>
+<h2>Haklarınız</h2>
+<p>6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamındaki haklarınızla ilgili sorularınız için
+<a href="mailto:{config.CONTACT_EMAIL}">{config.CONTACT_EMAIL}</a> adresine yazabilirsiniz.</p>"""
+    return page(site, "/gizlilik/", "Gizlilik ve Çerez Politikası – sebzehali.com",
+                "sebzehali.com gizlilik ve çerez politikası.", body)
+
+
+def contact_page(site):
+    body = f"""
+<h1>İletişim</h1>
+<p>Hatalı bir fiyat, eksik bir şehir veya bir öneriniz mi var? Reklam ve iş birliği için de yazabilirsiniz.</p>
+<p class="contact"><a href="mailto:{config.CONTACT_EMAIL}">{config.CONTACT_EMAIL}</a></p>
+<p>sebzehali.com, {e(config.OPERATOR)} tarafından işletilmektedir.</p>"""
+    return page(site, "/iletisim/", "İletişim – sebzehali.com", "sebzehali.com ile iletişim.", body)
 
 
 def not_found(site):
@@ -361,11 +585,15 @@ def build(out, base_url):
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    pages = {"/": home(site), "/hakkinda/": about_page(site)}
+    weekly, this_week = weekly_pages(site)
+    pages = {"/": home(site, this_week), "/hakkinda/": about_page(site), "/gizlilik/": privacy_page(site),
+             "/iletisim/": contact_page(site), **weekly}
     for c in site.cities:
         pages[f"/hal/{c}/"] = city_page(site, c)
     for p in site.products:
         pages[f"/urun/{p}/"] = product_page(site, p)
+        for c in site.products[p]:
+            pages[f"/hal/{c}/{p}/"] = city_product_page(site, c, p)
     for path, content in pages.items():
         target = out / path.strip("/") / "index.html" if path != "/" else out / "index.html"
         target.parent.mkdir(parents=True, exist_ok=True)

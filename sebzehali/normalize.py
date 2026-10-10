@@ -19,7 +19,6 @@ _TWO_WORD_PRODUCTS = {
     "dere otu": "dereotu",
     "hindistan cevizi": "hindistan-cevizi",
     "kara lahana": "kara-lahana",
-    "kirmizi lahana": "kirmizi-lahana",
     "frenk sogani": "frenk-sogani",
     "taze sogan": "taze-sogan",
     "yer elmasi": "yer-elmasi",
@@ -34,6 +33,10 @@ _TWO_WORD_PRODUCTS = {
     "kara dut": "dut",
     "ciplak mezgit": "mezgit",
     "norvec somonu": "somon",
+    "bruksel lahanasi": "bruksel-lahanasi",
+    "tatli patates": "tatli-patates",
+    "trabzon hurmasi": "trabzon-hurmasi",
+    "yeni dunya": "yeni-dunya",
 }
 
 # Misspellings and alternative names seen in the bulletins, keyed by slug.
@@ -64,6 +67,13 @@ _ALIASES = {
     "bluberry": "yaban-mersini",
     "blueberry": "yaban-mersini",
     "bas": "sarimsak",
+    "balkabagi": "bal-kabagi",
+    "dolmalik": "biber",
+    "karadenizyapragi": "karadeniz-yapragi",
+    "altincilek": "altin-cilek",
+    "karalahana": "kara-lahana",
+    "mersin": "yaban-mersini",
+    "rozmerin": "biberiye",
 }
 
 # Display names for products whose bulletin spelling is often all-caps or lacks Turkish letters.
@@ -86,7 +96,9 @@ PRODUCT_NAMES = {
     "alabalik": "Alabalık", "lufer": "Lüfer", "kalamar": "Kalamar", "karides": "Karides",
     "kuzukulagi": "Kuzukulağı", "eksi-ot": "Ekşi ot", "altin-cilek": "Altın çilek", "ejder-meyvesi": "Ejder meyvesi",
     "yaban-mersini": "Yaban mersini", "bal-kabagi": "Bal kabağı", "mezgit": "Mezgit", "hindistan-cevizi": "Hindistan cevizi",
-    "yer-elmasi": "Yer elması", "pazi": "Pazı", "tere": "Tere", "feslegen": "Fesleğen", "reyhan": "Reyhan",
+    "yer-elmasi": "Yer elması", "bruksel-lahanasi": "Brüksel lahanası", "tatli-patates": "Tatlı patates",
+    "trabzon-hurmasi": "Trabzon hurması", "yeni-dunya": "Yeni dünya", "kara-lahana": "Kara lahana",
+    "karadeniz-yapragi": "Karadeniz yaprağı", "biberiye": "Biberiye", "kisnis": "Kişniş", "kuskonmaz": "Kuşkonmaz", "pazi": "Pazı", "tere": "Tere", "feslegen": "Fesleğen", "reyhan": "Reyhan",
     "pancar": "Pancar", "nektarin": "Nektarin", "mango": "Mango", "dut": "Dut", "salgam": "Şalgam",
     "bogurtlen": "Böğürtlen", "kizilcik": "Kızılcık", "hunnap": "Hünnap", "uskumru": "Uskumru",
     "cinekop": "Çinekop", "kefal": "Kefal", "alic": "Alıç", "kekik": "Kekik", "endivyen": "Endivyen",
