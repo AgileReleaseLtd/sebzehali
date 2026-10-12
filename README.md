@@ -19,6 +19,10 @@ static website. Python 3 standard library only; no database, no server.
 3. GitHub Actions (`.github/workflows/daily.yml`) runs both four times a day, commits new data and
    deploys to GitHub Pages.
 
+## To do
+
+Open tasks are listed in `todo/todo.md`, with one file per task in `todo/items/`.
+
 ## Sources
 
 | City | Source | History |
