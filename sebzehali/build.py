@@ -4,7 +4,8 @@
 
 Pages: / (today's overview), /hal/<city>/ (one city's bulletin), /urun/<product>/ (one product
 across cities, with a price chart), /hakkinda/ (sources), plus sitemap.xml and robots.txt.
-No JavaScript framework; the only script is the search filter on the home page.
+No JavaScript framework; the only scripts are the search filter on the home page and the cookie
+consent bar (static/cerez.js), which loads Google Analytics after the visitor accepts.
 """
 
 import argparse
@@ -147,11 +148,20 @@ def page(site, path, title, description, body, extra_head=""):
 
 
 def analytics_snippet():
-    if not config.CLOUDFLARE_BEACON_TOKEN:
-        return ""
-    beacon = json.dumps({"token": config.CLOUDFLARE_BEACON_TOKEN})
-    return (f"<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" "
-            f"data-cf-beacon='{beacon}'></script>\n")
+    out = ""
+    if config.GA_MEASUREMENT_ID:
+        # The bar starts hidden; cerez.js shows it and loads Google Analytics only after "Kabul et".
+        out += f"""<div id="cerez" class="cerez" role="region" aria-label="Çerez bildirimi" hidden>
+<p>Ziyaret istatistikleri için Google Analytics çerezlerini kullanmak istiyoruz. <a href="/gizlilik/">Ayrıntılar</a></p>
+<div><button type="button" data-cerez="evet">Kabul et</button><button type="button" data-cerez="hayir">Reddet</button></div>
+</div>
+<script defer src="/cerez.js" data-ga="{e(config.GA_MEASUREMENT_ID)}"></script>
+"""
+    if config.CLOUDFLARE_BEACON_TOKEN:
+        beacon = json.dumps({"token": config.CLOUDFLARE_BEACON_TOKEN})
+        out += (f"<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" "
+                f"data-cf-beacon='{beacon}'></script>\n")
+    return out
 
 
 def change_badge(now, before):
@@ -541,10 +551,37 @@ Fiyatlar her gün birkaç kez otomatik olarak güncellenir.</p>
 
 
 def privacy_page(site):
-    analytics = ("Ziyaret istatistikleri için çerez kullanmayan Cloudflare Web Analytics kullanılır: sayfa adresi, "
-                 "yönlendiren site, ülke ve tarayıcı türü gibi toplu bilgiler kaydedilir; sizi tanımlayan bir bilgi "
-                 "veya çerez tutulmaz." if config.CLOUDFLARE_BEACON_TOKEN else
-                 "Şu anda ziyaretçi istatistiği aracı kullanılmamaktadır.")
+    analytics = []
+    if config.GA_MEASUREMENT_ID:
+        analytics.append(
+            "Ziyaret istatistikleri için Google Analytics kullanılır; ancak yalnızca çerez bildiriminde "
+            "“Kabul et”i seçerseniz çalışır, dayanağı açık rızanızdır. Kabul ederseniz Google; ziyaret ettiğiniz "
+            "sayfaları, yönlendiren siteyi, yaklaşık konumunuzu (ülke, şehir), cihaz ve tarayıcı türünüzü ve "
+            "çerezde tutulan rastgele bir kimliği toplar. Bu bilgiler Google tarafından yurt dışındaki "
+            "sunucularda işlenir (<a href=\"https://policies.google.com/privacy?hl=tr\" rel=\"nofollow noopener\">"
+            "Google gizlilik politikası</a>). Reddederseniz Google Analytics hiç yüklenmez.")
+    if config.CLOUDFLARE_BEACON_TOKEN:
+        analytics.append(
+            "Ziyaret istatistikleri için çerez kullanmayan Cloudflare Web Analytics kullanılır: sayfa adresi, "
+            "yönlendiren site, ülke ve tarayıcı türü gibi toplu bilgiler kaydedilir; sizi tanımlayan bir bilgi "
+            "veya çerez tutulmaz.")
+    if not analytics:
+        analytics.append("Şu anda ziyaretçi istatistiği aracı kullanılmamaktadır.")
+    analytics = "</p>\n<p>".join(analytics)
+    if config.GA_MEASUREMENT_ID:
+        ga_cookie = "_ga_" + config.GA_MEASUREMENT_ID.removeprefix("G-")
+        cookies = (
+            "sebzehali.com, siz izin vermedikçe çerez kullanmaz. İzin verirseniz Google Analytics "
+            f"<code>_ga</code> ve <code>{e(ga_cookie)}</code> adlı çerezleri yerleştirir; bunlar ziyaretleri "
+            "birbirinden ayırt eden rastgele bir kimlik içerir ve en fazla 2 yıl saklanır. Seçiminiz (kabul veya "
+            "ret) çerezde değil, tarayıcınızın yerel deposunda tutulur.</p>\n"
+            "<p>Seçiminizi istediğiniz zaman değiştirebilirsiniz; reddettiğinizde bu çerezler silinir: "
+            "<button type=\"button\" class=\"cerez-sor\" data-cerez=\"sor\">Çerez tercihimi değiştir</button></p>\n"
+            "<p>Site ileride reklam gösterirse bu sayfa güncellenecek ve reklam çerezleri için ayrıca izniniz "
+            "istenecektir.")
+    else:
+        cookies = ("sebzehali.com çerez kullanmaz. Site ileride reklam gösterirse bu sayfa güncellenecek ve "
+                   "çerezler için önceden izniniz istenecektir.")
     body = f"""
 <h1>Gizlilik ve çerez politikası</h1>
 <p>Son güncelleme: {tr_date(config.PRIVACY_UPDATED)}</p>
@@ -556,7 +593,7 @@ def privacy_page(site):
 <p>Site GitHub Pages üzerinde barındırılır. GitHub, güvenlik ve hizmetin çalışması için ziyaretçilerin IP adresini
 kısa süreli olarak kaydedebilir (<a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="nofollow noopener">GitHub gizlilik bildirimi</a>).</p>
 <h2>Çerezler</h2>
-<p>sebzehali.com çerez kullanmaz. Site ileride reklam gösterirse bu sayfa güncellenecek ve çerezler için önceden izniniz istenecektir.</p>
+<p>{cookies}</p>
 <h2>Haklarınız</h2>
 <p>6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamındaki haklarınızla ilgili sorularınız için
 <a href="mailto:{config.CONTACT_EMAIL}">{config.CONTACT_EMAIL}</a> adresine yazabilirsiniz.</p>"""

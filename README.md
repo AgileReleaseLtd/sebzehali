@@ -14,7 +14,9 @@ static website. Python 3 standard library only; no database, no server.
    - `/hal/<city>/<product>/`: one product in one city, compared with the other cities;
    - `/haftalik/` and `/haftalik/<year-week>/`: weekly risers and fallers;
    - `/gizlilik/` (privacy and cookies) and `/iletisim/` (contact); settings in `sebzehali/config.py`,
-     including the optional Cloudflare Web Analytics token;
+     including the Google Analytics id and the optional Cloudflare Web Analytics token. Google
+     Analytics sets cookies, so `static/cerez.js` shows a consent bar and loads it only after the
+     visitor accepts;
    - `/hakkinda/`: sources and disclaimer; plus `sitemap.xml`, `robots.txt`, `CNAME`.
 3. GitHub Actions (`.github/workflows/daily.yml`) runs both four times a day, commits new data and
    deploys to GitHub Pages.

@@ -52,3 +52,9 @@ footer{margin-top:48px;padding:20px 0;border-top:1px solid var(--line);font-size
 .contact{font-size:20px;font-weight:700}
 footer .links a{margin-right:2px}
 .top nav a:last-child{color:var(--muted)}
+.cerez{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;justify-content:center;gap:10px 16px;flex-wrap:wrap;padding:12px 16px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(0,0,0,.08);font-size:14px}
+.cerez[hidden]{display:none}
+.cerez p{margin:0;max-width:640px}
+.cerez div{display:flex;gap:8px}
+.cerez button,.cerez-sor{font:inherit;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--brand);background:var(--brand);color:var(--surface);cursor:pointer}
+.cerez-sor{background:transparent;color:var(--brand)}

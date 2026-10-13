@@ -7,7 +7,7 @@ its status to `done` in both places.
 
 | id | task | status | priority |
 |---|---|---|---|
-| [s-001](items/s-001.md) | Cloudflare Web Analytics token | blocked (owner) | P2 |
+| [s-001](items/s-001.md) | Cloudflare Web Analytics token | done | P2 |
 | [s-002](items/s-002.md) | Check Search Console and the daily runs | open | P2 |
 | [s-003](items/s-003.md) | http to https redirect | open | P3 |
 | [s-004](items/s-004.md) | Telegram channel | open | P2 |
@@ -22,3 +22,4 @@ its status to `done` in both places.
 | [s-013](items/s-013.md) | İzmir missing from the scheduled fetch | open | P1 |
 | [s-014](items/s-014.md) | GitHub's schedule is unreliable | open | P1 |
 | [s-015](items/s-015.md) | Antalya bulletins published as scans | open | P2 |
+| [s-016](items/s-016.md) | Check Google Analytics is receiving visits | open | P2 |
