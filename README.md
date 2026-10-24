@@ -17,6 +17,11 @@ static website. Python 3 standard library only; no database, no server.
      including the Google Analytics id and the optional Cloudflare Web Analytics token. Google
      Analytics sets cookies, so `static/cerez.js` shows a consent bar and loads it only after the
      visitor accepts;
+   - Google AdSense, off until `ADSENSE_CLIENT` and `ADSENSE_SLOT` are set in `config.py` (see the
+     comment there; `ads.txt` is written from them). Ads go on the price pages and, like Google
+     Analytics, `static/cerez.js` loads them only for visitors who accept; the privacy page lets
+     visitors choose statistics and ads separately;
+   - `/reklam/`: for advertisers, with a pre-filled e-mail and an optional WhatsApp button;
    - `/hakkinda/`: sources and disclaimer; plus `sitemap.xml`, `robots.txt`, `CNAME`.
 3. GitHub Actions (`.github/workflows/daily.yml`) runs both four times a day, commits new data and
    deploys to GitHub Pages.

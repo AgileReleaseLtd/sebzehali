@@ -3,9 +3,10 @@
     python3 -m sebzehali.build [--out site] [--base-url https://www.sebzehali.com]
 
 Pages: / (today's overview), /hal/<city>/ (one city's bulletin), /urun/<product>/ (one product
-across cities, with a price chart), /hakkinda/ (sources), plus sitemap.xml and robots.txt.
+across cities, with a price chart), /hakkinda/ (sources), /reklam/ (for advertisers), plus
+sitemap.xml and robots.txt (and ads.txt once AdSense is set up).
 No JavaScript framework; the only scripts are the search filter on the home page and the cookie
-consent bar (static/cerez.js), which loads Google Analytics after the visitor accepts.
+consent bar (static/cerez.js), which loads Google Analytics and AdSense after the visitor accepts.
 """
 
 import argparse
@@ -14,8 +15,10 @@ import datetime as dt
 import html
 import json
 import pathlib
+import re
 import shutil
 import statistics
+import urllib.parse
 
 from . import config, normalize, sources
 
@@ -110,6 +113,8 @@ class Site:
 
 def page(site, path, title, description, body, extra_head=""):
     canonical = f"{site.base}{path}"
+    # Lets Google check the site is ours while it reviews the AdSense application; loads nothing.
+    adsense = f'<meta name="google-adsense-account" content="{e(config.ADSENSE_CLIENT)}">\n' if config.ADSENSE_CLIENT else ""
     return f"""<!doctype html>
 <html lang="tr">
 <head>
@@ -124,7 +129,7 @@ def page(site, path, title, description, body, extra_head=""):
 <meta property="og:url" content="{canonical}">
 <meta property="og:locale" content="tr_TR">
 <meta name="theme-color" content="#1f7a4d">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+{adsense}<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 {extra_head}</head>
 <body>
@@ -139,7 +144,7 @@ def page(site, path, title, description, body, extra_head=""):
 <p>Fiyatlar belediyelerin yayımladığı günlük hal bültenlerinden alınır; toptan (hal) fiyatlarıdır, market ve pazar fiyatları farklıdır.
 </p>
 <p class="links"><a href="/hakkinda/">Kaynaklar ve açıklama</a> · <a href="/haftalik/">Haftalık özet</a> ·
-<a href="/gizlilik/">Gizlilik ve çerezler</a> · <a href="/iletisim/">İletişim</a></p>
+<a href="/gizlilik/">Gizlilik ve çerezler</a> · <a href="/iletisim/">İletişim</a> · <a href="/reklam/">Reklam verin</a></p>
 <p>© {dt.date.today().year} sebzehali.com</p>
 </div></footer>
 {analytics_snippet()}</body>
@@ -147,21 +152,44 @@ def page(site, path, title, description, body, extra_head=""):
 """
 
 
+def ads_on():
+    return bool(config.ADSENSE_CLIENT and config.ADSENSE_SLOT)
+
+
 def analytics_snippet():
     out = ""
-    if config.GA_MEASUREMENT_ID:
-        # The bar starts hidden; cerez.js shows it and loads Google Analytics only after "Kabul et".
+    ga, ads = config.GA_MEASUREMENT_ID, ads_on()
+    if ga or ads:
+        if ga and ads:
+            ask = ("Ziyaret istatistikleri ve reklamlar için çerez kullanmak istiyoruz. "
+                   '<a href="/gizlilik/#cerezler">Ayrıntılar ve ayrı ayrı seçim</a>')
+        elif ads:
+            ask = 'Reklamlar için Google AdSense çerezlerini kullanmak istiyoruz. <a href="/gizlilik/#cerezler">Ayrıntılar</a>'
+        else:
+            ask = 'Ziyaret istatistikleri için Google Analytics çerezlerini kullanmak istiyoruz. <a href="/gizlilik/#cerezler">Ayrıntılar</a>'
+        attrs = (f' data-ga="{e(ga)}"' if ga else "") + (f' data-ads="{e(config.ADSENSE_CLIENT)}"' if ads else "")
+        # The bar starts hidden; cerez.js shows it and loads Google Analytics and AdSense only after
+        # the visitor accepts them.
         out += f"""<div id="cerez" class="cerez" role="region" aria-label="Çerez bildirimi" hidden>
-<p>Ziyaret istatistikleri için Google Analytics çerezlerini kullanmak istiyoruz. <a href="/gizlilik/">Ayrıntılar</a></p>
+<p>{ask}</p>
 <div><button type="button" data-cerez="evet">Kabul et</button><button type="button" data-cerez="hayir">Reddet</button></div>
 </div>
-<script defer src="/cerez.js" data-ga="{e(config.GA_MEASUREMENT_ID)}"></script>
+<script defer src="/cerez.js"{attrs}></script>
 """
     if config.CLOUDFLARE_BEACON_TOKEN:
         beacon = json.dumps({"token": config.CLOUDFLARE_BEACON_TOKEN})
         out += (f"<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" "
                 f"data-cf-beacon='{beacon}'></script>\n")
     return out
+
+
+def ad_slot():
+    """An AdSense unit, hidden until cerez.js loads ads for a visitor who accepted them. Empty while ads are off."""
+    if not ads_on():
+        return ""
+    return (f'<aside class="reklam" aria-label="Reklam" hidden><p><span>Reklam</span> <a href="/reklam/">Siz de reklam verin</a></p>'
+            f'<ins class="adsbygoogle" style="display:block" data-ad-client="{e(config.ADSENSE_CLIENT)}" '
+            f'data-ad-slot="{e(config.ADSENSE_SLOT)}" data-ad-format="auto" data-full-width-responsive="true"></ins></aside>')
 
 
 def change_badge(now, before):
@@ -239,6 +267,7 @@ Son bülten: <b>{tr_date(site.newest, True)}</b>.</p>
 <section><h2>Çok aranan ürünler</h2><div class="cards">{''.join(cards)}</div></section>
 {week_teaser(site, week)}
 <section><h2>Şehirler</h2><div class="cities">{city_cards}</div></section>
+{ad_slot()}
 <section>
 <h2>Tüm ürünler</h2>
 <input id="q" type="search" placeholder="Ürün ara: domates, elma, hamsi…" autocomplete="off" aria-label="Ürün ara">
@@ -286,7 +315,9 @@ def city_page(site, c):
 <h1>{e(CITY_NAMES[c])} hal fiyatları</h1>
 <p class="lead">{tr_date(date, True)} tarihli {e(CITY_NAMES[c])} hal bülteni: {len(items)} ürün.
 Değişim, bir önceki bültene ({tr_date(max(d for d in site.data[c] if d < date)) if prev_items else '–'}) göre ortalama fiyattaki farktır.</p>
-{''.join(sections)}
+{sections[0] if sections else ''}
+{ad_slot()}
+{''.join(sections[1:])}
 <p class="src">Kaynak: <a href="{e(CITY_URLS[c])}" rel="nofollow noopener">{e(CITY_NAMES[c])} Büyükşehir Belediyesi</a>.
 Kayıtlı bültenler: {', '.join(tr_date(d) for d in history)}{' …' if len(site.data[c]) > 10 else ''}</p>"""
     title = f"{CITY_NAMES[c]} Hal Fiyatları Bugün ({tr_date(date)}) – Sebze Meyve Fiyatları"
@@ -368,6 +399,7 @@ def product_page(site, product):
 ({tr_date(site.newest)}).</p>
 {price_table(rows, show_product=False, show_city=True, prev=prev)}
 {chart(site, product)}
+{ad_slot()}
 {faq_html}
 <section><h2>Diğer {e(normalize.CATEGORIES.get(site.category.get(product), 'ürün').lower())} fiyatları</h2>
 <p class="tags">{''.join(f'<a href="/urun/{p}/">{e(site.name(p))}</a>' for p in related)}</p></section>"""
@@ -421,6 +453,7 @@ def city_product_page(site, c, product):
 <b>{money(lo)} – {money(hi)}</b> / {e(unit)}.</p>
 {price_table([(c, it) for it in items], prev=prev, city_scope=True)}
 {chart(site, product, cities=[c])}
+{ad_slot()}
 {compare}
 {faq_html}
 <section><h2>{e(city)} halinde diğer ürünler</h2>
@@ -503,6 +536,7 @@ def weekly_body(site, w, info, heading=True):
 <section><h2>En çok zamlananlar</h2><ol class="movers">{lst(up)}</ol></section>
 <section><h2>En çok ucuzlayanlar</h2><ol class="movers">{lst(down)}</ol></section>
 </div>
+{ad_slot()}
 <section><h2>Şehirlere göre ortalama değişim</h2><ul class="compare">{city_rows}</ul>
 <p class="src">Her ürünün aynı halde ve aynı çeşitteki haftalık ortalama fiyatı bir önceki haftayla karşılaştırılır;
 ürün değişimi bu farkların ortancasıdır.</p></section>"""
@@ -568,20 +602,49 @@ def privacy_page(site):
     if not analytics:
         analytics.append("Şu anda ziyaretçi istatistiği aracı kullanılmamaktadır.")
     analytics = "</p>\n<p>".join(analytics)
+    ads = ""
+    if ads_on():
+        # The second paragraph is the disclosure AdSense's programme policies require.
+        ads = (
+            "<h2>Reklamlar</h2>\n"
+            "<p>Sitede Google AdSense reklamları gösterilir; ancak reklam kodu yalnızca reklam çerezlerine izin "
+            "verirseniz yüklenir, dayanağı açık rızanızdır. Reddederseniz reklam gösterilmez.</p>\n"
+            "<p>Google dahil üçüncü taraf reklam sağlayıcıları, bu siteye veya diğer sitelere önceki ziyaretlerinize "
+            "göre reklam göstermek için çerez kullanır. Google’ın reklam çerezleri, Google’ın ve iş ortaklarının bu "
+            "siteye ve internetteki diğer sitelere yaptığınız ziyaretlere göre size reklam göstermesini sağlar. Bu "
+            "bilgiler Google tarafından yurt dışındaki sunucularda işlenir (<a href=\"https://policies.google.com/"
+            "technologies/ads?hl=tr\" rel=\"nofollow noopener\">Google reklam teknolojileri</a>). Kişiselleştirilmiş "
+            "reklamları <a href=\"https://myadcenter.google.com/?hl=tr\" rel=\"nofollow noopener\">Reklam Merkezim</a> "
+            "sayfasından kapatabilirsiniz.</p>\n")
+    used, choices = [], []
     if config.GA_MEASUREMENT_ID:
         ga_cookie = "_ga_" + config.GA_MEASUREMENT_ID.removeprefix("G-")
-        cookies = (
-            "sebzehali.com, siz izin vermedikçe çerez kullanmaz. İzin verirseniz Google Analytics "
+        used.append(
+            "İstatistiklere izin verirseniz Google Analytics "
             f"<code>_ga</code> ve <code>{e(ga_cookie)}</code> adlı çerezleri yerleştirir; bunlar ziyaretleri "
-            "birbirinden ayırt eden rastgele bir kimlik içerir ve en fazla 2 yıl saklanır. Seçiminiz (kabul veya "
-            "ret) çerezde değil, tarayıcınızın yerel deposunda tutulur.</p>\n"
-            "<p>Seçiminizi istediğiniz zaman değiştirebilirsiniz; reddettiğinizde bu çerezler silinir: "
-            "<button type=\"button\" class=\"cerez-sor\" data-cerez=\"sor\">Çerez tercihimi değiştir</button></p>\n"
-            "<p>Site ileride reklam gösterirse bu sayfa güncellenecek ve reklam çerezleri için ayrıca izniniz "
-            "istenecektir.")
+            "birbirinden ayırt eden rastgele bir kimlik içerir ve en fazla 2 yıl saklanır.")
+        choices.append('<label><input type="checkbox" name="istatistik"> İstatistik çerezleri (Google Analytics)</label>')
+    if ads_on():
+        used.append(
+            "Reklamlara izin verirseniz Google, sebzehali.com üzerinde <code>__gads</code>, <code>__gpi</code> ve "
+            "<code>__eoi</code> adlı çerezleri, kendi alan adlarında da başka reklam çerezlerini yerleştirebilir; "
+            "bunlar en fazla 13 ay saklanır.")
+        choices.append('<label><input type="checkbox" name="reklam"> Reklam çerezleri (Google AdSense)</label>')
+    if choices:
+        # cerez.js ticks the boxes from the saved choices and saves the form.
+        cookies = (
+            f"<p>sebzehali.com, siz izin vermedikçe çerez kullanmaz. {' '.join(used)} Seçiminiz (kabul veya ret) "
+            "çerezde değil, tarayıcınızın yerel deposunda tutulur.</p>\n"
+            "<p>Seçiminizi istediğiniz zaman değiştirebilirsiniz; izni kaldırdığınızda sebzehali.com üzerindeki bu "
+            "çerezler silinir.</p>\n"
+            f'<form id="cerez-tercih" class="tercih">{"".join(choices)}'
+            '<div><button type="submit">Tercihimi kaydet</button> <span role="status"></span></div></form>\n')
+        if not ads_on():
+            cookies += ("<p>Site ileride reklam gösterirse bu sayfa güncellenecek ve reklam çerezleri için ayrıca "
+                        "izniniz istenecektir.</p>\n")
     else:
-        cookies = ("sebzehali.com çerez kullanmaz. Site ileride reklam gösterirse bu sayfa güncellenecek ve "
-                   "çerezler için önceden izniniz istenecektir.")
+        cookies = ("<p>sebzehali.com çerez kullanmaz. Site ileride reklam gösterirse bu sayfa güncellenecek ve "
+                   "çerezler için önceden izniniz istenecektir.</p>\n")
     body = f"""
 <h1>Gizlilik ve çerez politikası</h1>
 <p>Son güncelleme: {tr_date(config.PRIVACY_UPDATED)}</p>
@@ -592,9 +655,8 @@ def privacy_page(site):
 <p>{analytics}</p>
 <p>Site GitHub Pages üzerinde barındırılır. GitHub, güvenlik ve hizmetin çalışması için ziyaretçilerin IP adresini
 kısa süreli olarak kaydedebilir (<a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="nofollow noopener">GitHub gizlilik bildirimi</a>).</p>
-<h2>Çerezler</h2>
-<p>{cookies}</p>
-<h2>Haklarınız</h2>
+{ads}<h2 id="cerezler">Çerezler</h2>
+{cookies}<h2>Haklarınız</h2>
 <p>6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) kapsamındaki haklarınızla ilgili sorularınız için
 <a href="mailto:{config.CONTACT_EMAIL}">{config.CONTACT_EMAIL}</a> adresine yazabilirsiniz.</p>"""
     return page(site, "/gizlilik/", "Gizlilik ve Çerez Politikası – sebzehali.com",
@@ -604,10 +666,56 @@ kısa süreli olarak kaydedebilir (<a href="https://docs.github.com/en/site-poli
 def contact_page(site):
     body = f"""
 <h1>İletişim</h1>
-<p>Hatalı bir fiyat, eksik bir şehir veya bir öneriniz mi var? Reklam ve iş birliği için de yazabilirsiniz.</p>
+<p>Hatalı bir fiyat, eksik bir şehir veya bir öneriniz mi var? Reklam ve iş birliği için de yazabilirsiniz
+(<a href="/reklam/">reklam seçenekleri</a>).</p>
 <p class="contact"><a href="mailto:{config.CONTACT_EMAIL}">{config.CONTACT_EMAIL}</a></p>
 <p>sebzehali.com, {e(config.OPERATOR)} tarafından işletilmektedir.</p>"""
     return page(site, "/iletisim/", "İletişim – sebzehali.com", "sebzehali.com ile iletişim.", body)
+
+
+def advertising_page(site):
+    """/reklam/: for firms that want to advertise. The e-mail opens with a subject and the questions we'd ask."""
+    q = urllib.parse.quote
+    mail = (f"mailto:{config.CONTACT_EMAIL}?subject={q('sebzehali.com reklam')}&body="
+            + q("Firma adı:\r\nŞehir:\r\nTelefon:\r\nTanıtmak istediğiniz ürün veya hizmet:\r\n"
+                "Hangi sayfalarda (şehir, ürün veya tüm site):\r\n"))
+    buttons = f'<a class="btn" href="{e(mail)}">E-posta ile yazın</a>'
+    if config.ADVERTISING_WHATSAPP:
+        number = re.sub(r"\D", "", config.ADVERTISING_WHATSAPP)
+        wa = f"https://wa.me/{number}?text={q('Merhaba, sebzehali.com’da reklam vermek istiyorum.')}"
+        buttons += f' <a class="btn alt" href="{e(wa)}" rel="noopener">WhatsApp’tan yazın</a>'
+    city = site.cities[0]
+    product = next((p for p in FEATURED if p in site.products), None)
+    product_eg = f', örneğin <a href="/urun/{product}/">{e(site.name(product).lower())} hal fiyatı</a>' if product else ""
+    body = f"""
+<nav class="crumbs"><a href="/">Hal fiyatları</a> › Reklam</nav>
+<h1>sebzehali.com’da reklam verin</h1>
+<p class="lead">sebzehali.com, {', '.join(CITY_NAMES[c] for c in site.cities)} hallerinin günlük toptan fiyatlarını yayımlar:
+{len(site.products)} ürün, her gün birkaç kez güncellenir. Sayfalarımız hal fiyatlarını takip edenler için hazırlanır:
+üreticiler, komisyoncular, manavlar, market ve restoran alıcıları.</p>
+<h2>Kimler için uygun?</h2>
+<ul>
+<li>Hal komisyoncuları ve toptancılar</li>
+<li>Nakliye, soğuk zincir ve soğuk hava deposu firmaları</li>
+<li>Tohum, fide, gübre ve zirai ilaç bayileri</li>
+<li>Kasa, ambalaj, sera ve tarım makinesi firmaları</li>
+</ul>
+<h2>Reklamınız nerede görünür?</h2>
+<ul>
+<li><b>Şehir sayfaları:</b> bir halin günlük bülteninde ve o şehrin ürün sayfalarında, örneğin
+<a href="/hal/{city}/">{e(CITY_NAMES[city])} hal fiyatları</a>.</li>
+<li><b>Ürün sayfaları:</b> seçtiğiniz ürünlerin sayfalarında{product_eg}.</li>
+<li><b>Tüm site:</b> bütün fiyat sayfalarında.</li>
+</ul>
+<p>Reklamlar “Reklam” etiketiyle gösterilir. Reklam vermek sitedeki fiyatları etkilemez.</p>
+<h2>Bize yazın</h2>
+<p>Firmanızı, şehrinizi ve neyi tanıtmak istediğinizi yazın; size uygun sayfaları ve fiyatı bildirelim.</p>
+<p class="actions">{buttons}</p>
+<p>E-posta: <a href="mailto:{config.CONTACT_EMAIL}">{config.CONTACT_EMAIL}</a>.
+sebzehali.com, {e(config.OPERATOR)} tarafından işletilmektedir.</p>"""
+    return page(site, "/reklam/", "Reklam Verin – sebzehali.com",
+                "sebzehali.com’da reklam: hal fiyatlarını takip eden üretici, komisyoncu ve alıcılara şehir ve ürün "
+                "sayfalarında ulaşın.", body)
 
 
 def not_found(site):
@@ -618,13 +726,15 @@ def not_found(site):
 # ---------------------------------------------------------------- main
 
 def build(out, base_url):
+    if config.ADSENSE_CLIENT and not re.fullmatch(r"ca-pub-\d+", config.ADSENSE_CLIENT):
+        raise ValueError(f"ADSENSE_CLIENT should look like ca-pub-1234567890123456, not {config.ADSENSE_CLIENT!r}")
     site = Site(load(), base_url)
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     weekly, this_week = weekly_pages(site)
     pages = {"/": home(site, this_week), "/hakkinda/": about_page(site), "/gizlilik/": privacy_page(site),
-             "/iletisim/": contact_page(site), **weekly}
+             "/iletisim/": contact_page(site), "/reklam/": advertising_page(site), **weekly}
     for c in site.cities:
         pages[f"/hal/{c}/"] = city_page(site, c)
     for p in site.products:
@@ -639,6 +749,10 @@ def build(out, base_url):
     for f in STATIC.iterdir():
         shutil.copy(f, out / f.name)
     (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {site.base}/sitemap.xml\n", encoding="utf-8")
+    if config.ADSENSE_CLIENT:
+        # f08c47fec0942fa0 is Google's own id in the ads.txt standard.
+        pub = config.ADSENSE_CLIENT.removeprefix("ca-")
+        (out / "ads.txt").write_text(f"google.com, {pub}, DIRECT, f08c47fec0942fa0\n", encoding="utf-8")
     urls = "".join(f"<url><loc>{site.base}{p}</loc><lastmod>{site.newest}</lastmod></url>" for p in pages)
     (out / "sitemap.xml").write_text(
         f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>\n',
